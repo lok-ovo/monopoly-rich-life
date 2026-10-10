@@ -1,0 +1,24 @@
+GitHub Packager generated build bundle
+
+This workflow runs only on manual workflow_dispatch. GitHub requires the workflow to exist on the default branch before it can be dispatched. Review and merge the generated pull request first, then select the reviewed branch and pass its exact 40-character commit SHA in source_sha. Checkout is pinned to that reviewed commit.
+
+The runner executes npm/pip lifecycle scripts and project build code in disposable GitHub-hosted machines. Path checks and argument arrays prevent accidental command injection by configuration; they are not a sandbox for malicious source code. No user tokens or signing secrets are inserted into the workflow. Checkout credentials are not persisted; contents permission is read-only.
+
+Adapters: electron-builder 24–26; npm static Web or plain static HTML wrapped in Electron; Python GUI with explicit .py/.pyw entry, pip dependencies, and PyInstaller. Go/Rust/Java/.NET/Tauri/Forge, npm workspaces, server processes, databases, git submodules and Git LFS require additional adapters.
+
+Node 22 and Python 3.12 are selected. Node projects use npm ci when an npm lockfile exists, otherwise npm install automatically resolves dependencies and generates a lockfile only inside CI. Yarn/pnpm/Bun-only lockfiles are not silently reinterpreted. Development build dependencies are explicitly included. Requirements for other runtime versions need a reviewed workflow change. Existing Electron projects use their installed builder version and config, with name/id/version, installer target, output and unsigned mode overridden in CI. Mac binaries use ad-hoc signatures; they are not Developer ID signed or notarized. Windows editing/signing is disabled for builder compatibility, so existing executable resources may retain defaults. Windows and macOS may show trust warnings.
+
+Web wrapper denies Node integration, popups, external navigation and device permissions. Static assets use app://bundle so root-relative URLs work. Apps needing OAuth popups, camera/microphone, desktop APIs, remote navigation or a backend require explicit adaptation. Independent compiled Web output retains all resource extensions, including models and binary assets. Raw HTML directories accept common resource formats and fail explicitly on unknown file types. Dotfiles, npm metadata, node_modules and symlinks are excluded or rejected. Vite custom roots and subpath/remote bases require a dedicated recipe; the desktop opens at the root URL for history routing. Never place confidential data in the static output.
+
+Python includes common resource directories assets/resources/data/icons/ui/templates/static. Tool-only pyproject.toml files do not cause pip install .; known third-party GUI imports need declared runtime dependencies. Package-relative entry imports require a standalone launcher. Explicit runtime requirements that exclude Python 3.12 or Node 22 are blocked during inspection. Dynamic imports, plugins, uncommon asset layouts, GUI-specific hooks and system libraries need project-specific PyInstaller changes. A successful build is not a substitute for launching and testing the app on each target.
+
+Pinned wrapper tools: Electron 44.7.0, electron-builder 26.15.3; PyInstaller 6.16.0. Transitive wrapper dependencies and unpinned Python requirements can change; use a reviewed dependency lock for reproducible releases. Actions use maintained major tags, not immutable commit pins.
+
+Artifacts contain the installation package, SHA256SUMS.txt and build-manifest.json, retained for 14 days. SHA256 verifies transfer integrity; it does not establish publisher trust. No GitHub Release is published automatically. GitHub Actions availability, repository policies, network access, billing limits and third-party dependency availability can prevent builds.
+
+References checked 2026-10-10:
+https://docs.github.com/en/actions/reference/runners/github-hosted-runners
+https://www.electron.build/v26/docs/configuration/
+https://www.electron.build/v26/docs/mac/
+https://www.pyinstaller.org/en/stable/usage.html
+https://jrsoftware.org/ishelp/topic_setup_architecturesallowed.htm

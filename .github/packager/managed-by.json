@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "managedBy": "github-packager",
+  "files": {
+    ".github/packager/NOTES.txt": "fd429012c7267c7dc8556f380b3b5f57b3f35a6bf6658827234d085859f57c11",
+    ".github/packager/build.mjs": "2eab7bbfd3121231e7736fa1d9fb83aa835cfeca97f5239de78623a6d214ed64",
+    ".github/packager/config.json": "11fae4cad44bb045dcfb48e597c9a8cbae5cfca99998187e2c20f6ca600508e3",
+    ".github/workflows/packager.yml": "1ca68983986d1751a7f7dd37f71d09422a436afff9b9551380784e61a51097a7"
+  }
+}

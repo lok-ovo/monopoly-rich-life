@@ -1,0 +1,16 @@
+{
+  "kind": "web",
+  "projectDir": "",
+  "appName": "monopoly-rich-life",
+  "appId": "io.github.zawsstt.monopolyrichlife",
+  "version": "1.0.0",
+  "entry": "",
+  "buildCommand": "",
+  "outputDir": ".",
+  "packageManager": "npm",
+  "targets": [
+    "mac-arm64"
+  ],
+  "pythonWindowed": true,
+  "signing": "unsigned"
+}
