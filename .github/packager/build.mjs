@@ -186,20 +186,65 @@ app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(
 `;
 
 const STATIC_EXTENSIONS = new Set('.html .htm .css .js .mjs .json .wasm .png .jpg .jpeg .gif .webp .svg .ico .avif .bmp .woff .woff2 .ttf .otf .eot .mp3 .mp4 .webm .ogg .wav .pdf .txt .md .xml .webmanifest .vtt .csv .tsv .glb .gltf .bin .onnx .obj .mtl .stl .hdr .ktx .ktx2 .basis .data'.split(' '));
+
+// Shared with desktop inspection: classify paths without evaluating project code.
+// Supabase deployment files are recognized only relative to this output root,
+// and only when its own supabase/config.toml exists. Compiled assets are unchanged.
+export function staticResourceDisposition(relative, { compiledOutput = false, supabaseProject = false, directory = false } = {}) {
+  const parts = relative.split('/');
+  if (parts.some(name => name.startsWith('.') || ['node_modules', 'package.json', 'package-lock.json', 'npm-shrinkwrap.json'].includes(name))) return 'metadata';
+  if (!compiledOutput && supabaseProject && /^supabase\/(?:config\.toml$|seed\.sql$|(?:migrations|functions)(?:\/|$))/u.test(relative)) return 'backend';
+  const name = parts.at(-1);
+  if (directory || compiledOutput || STATIC_EXTENSIONS.has(path.posix.extname(name).toLowerCase()) || /^LICENSE(?:\..*)?$/iu.test(name)) return 'asset';
+  return 'unknown';
+}
+
+export function excludedStaticReferences(html, options = {}) {
+  if (typeof html !== 'string') return [];
+  const source = html.replace(/<!--[\s\S]*?-->/gu, '');
+  const values = [];
+  for (const match of source.matchAll(/\b(?:src|href|poster|data|srcset)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/giu)) {
+    const value = match[1] ?? match[2] ?? match[3];
+    if (/^srcset\b/iu.test(match[0])) values.push(...value.split(',').map(item => item.trim().split(/\s+/u)[0]));
+    else values.push(value);
+  }
+  for (const match of source.matchAll(/\burl\(\s*(?:"([^"]*)"|'([^']*)'|([^\s)]+))\s*\)/giu)) values.push(match[1] ?? match[2] ?? match[3]);
+  const excluded = [];
+  for (const value of values) {
+    if (!value || /^(?:[a-z][a-z\d+.-]*:|\/\/|#)/iu.test(value.trim())) continue;
+    try {
+      const relative = decodeURIComponent(new URL(value, 'https://repopack.invalid/').pathname).replace(/^\//u, '');
+      if (staticResourceDisposition(relative, options) === 'backend') excluded.push(relative);
+    } catch { /* Invalid resource URLs are not proof of a reference to an excluded file. */ }
+  }
+  return [...new Set(excluded)];
+}
+
 export async function copyStatic(source, destination, { compiledOutput = false } = {}) {
   const realSource = await fsp.realpath(source);
+  const supabaseProject = !compiledOutput && await fileExists(path.join(realSource, 'supabase/config.toml'));
+  const policy = { compiledOutput, supabaseProject };
+  if (supabaseProject) {
+    if (!await fileExists(path.join(realSource, 'index.html'))) throw new Error('静态输出根目录没有 index.html；SSR/服务端应用需要专门的桌面适配。');
+    const html = await fsp.readFile(path.join(realSource, 'index.html'), 'utf8');
+    const references = excludedStaticReferences(html, policy);
+    if (references.length) throw new Error(`网页直接引用了不会打包的 Supabase 后端部署文件：${references.join('、')}。请将网页所需资源放入独立静态资源目录后重新分析。`);
+    console.log('[packager] 已识别 Supabase 后端部署配置：不打包 supabase/config.toml、supabase/migrations/、supabase/functions/ 和 supabase/seed.sql。前端资源会保留；联网功能仍需要已部署、可访问的 Supabase 服务，不会自动变为离线应用。');
+  }
   let count = 0;
   let bytes = 0;
   async function visit(current, out) {
     await fsp.mkdir(out, { recursive: true });
     for (const entry of await fsp.readdir(current, { withFileTypes: true })) {
-      if (entry.name.startsWith('.') || ['node_modules', 'package.json', 'package-lock.json', 'npm-shrinkwrap.json'].includes(entry.name)) continue;
       const from = path.join(current, entry.name);
       const to = path.join(out, entry.name);
+      const relative = path.relative(realSource, from).split(path.sep).join('/');
+      const disposition = staticResourceDisposition(relative, { ...policy, directory: entry.isDirectory() });
+      if (disposition === 'metadata' || disposition === 'backend') continue;
       if (entry.isSymbolicLink()) throw new Error(`静态资源不能包含符号链接：${path.relative(realSource, from)}`);
       if (entry.isDirectory()) await visit(from, to);
       else if (entry.isFile()) {
-        if (!compiledOutput && !STATIC_EXTENSIONS.has(path.extname(entry.name).toLowerCase()) && !/^LICENSE(?:\..*)?$/iu.test(entry.name)) throw new Error(`静态目录包含无法确认用途的文件：${path.relative(realSource, from)}。不会静默丢弃；请提供经过构建、只包含网页资源的独立输出目录或专用资源配方。`);
+        if (disposition === 'unknown') throw new Error(`静态目录包含无法确认用途的文件：${relative}。不会静默丢弃；请提供经过构建、只包含网页资源的独立输出目录或专用资源配方。`);
         const stat = await fsp.stat(from);
         bytes += stat.size;
         if (++count > 50000 || bytes > 1024 * 1024 * 1024) throw new Error('静态资源超过 50,000 个文件或 1 GiB，请缩小输出目录。');
